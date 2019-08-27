@@ -1,0 +1,26 @@
+{
+  "name": "appengine-hello-world",
+  "description": "Simple Firechat App",
+  "version": "0.0.1",
+  "private": true,
+  "license": "Apache-2.0",
+  "author": "wcarle",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wcarle/firechat.git"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.16.3",
+    "twig": "^1.13.3"
+  },
+  "devDependencies": {
+    "mocha": "^6.1.4",
+    "supertest": "^4.0.2"
+  }
+}

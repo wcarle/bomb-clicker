@@ -1,0 +1,23 @@
+.goal {
+    padding: 20px;
+}
+h1 {
+    text-align: center;
+}
+#progress-container {
+    margin: 50px 0 50px 0;
+}
+#clicks {
+    text-align: center;
+    font-size: 80px;
+}
+#controls {
+    text-align: center;
+}
+#controls .btn {
+    font-size: 100px;
+    padding: 20px;
+}
+.progress {
+    height: 40px;
+}
