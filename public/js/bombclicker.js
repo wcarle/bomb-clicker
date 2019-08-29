@@ -1,7 +1,7 @@
 $(function() {
     // Set the configuration for your app
     const config = {
-        apiKey: "apiKey",
+        apiKey: "AIzaSyCgGZ3tKR0641h4tz5aS5MO3oHeaMRXay0",
         authDomain: "bomb-clicker.firebaseapp.com",
         databaseURL: "https://bomb-clicker.firebaseio.com",
     };
@@ -14,42 +14,129 @@ $(function() {
 
     var clickCounter = 0;
 
-    var clicker = database.ref('clicker');
-    var clicks = database.ref('clicker/clicks');
-    var goals = database.ref('goals');
+    var user = {
+        uid: null,
+        clicks: 0
+    };
+
+    const reportInterval = 1000;
+    var lastReport = 0;
+
+
+    var lastClicks = 0;
+
+    var allClicks = 0;
+    var localClicks = 0;
+
+    var clickerRef = database.ref('clicker');
+    var usersRef = database.ref('users');
+    var userRef = null;
+    var userClicksRef = null;
+    var clicksRef = database.ref('clicker/clicks');
+    var goalsRef = database.ref('goals');
+
+    login();
 
     var $button = $('#clicker');
     var $clickCount = $('#clicks');
     var $progressContainer = $('#progress-container');
 
-    $button.on('click', function (e) {
-        e.preventDefault();
 
-        clicks.transaction(function(clickcount){
-            if (clickcount >= 0) {
-                clickcount++;
-            }
-            else {
-                clickcount = 0;
-            }
-            return clickcount;
-        });
-    });
+    goalsRef.on('child_added', updateGoals);
+    goalsRef.on('child_removed', updateGoals);
+    goalsRef.on('child_changed', updateGoals);
 
 
-    goals.on('child_added', updateGoals);
-    goals.on('child_removed', updateGoals);
-    goals.on('child_changed', updateGoals);
-
-
-    clicker.on('value', function (data, prev) {
+    clickerRef.on('value', function (data, prev) {
         var val = data.val();
         if (val.clicks) {
-            incrementClick(val.clicks);
+            // allClicks = val.clicks;
+            // incrementClick();
         }
     });
 
-    function incrementClick(clicks) {
+    /**
+     * We're all logged in and setup, we can now accept user input
+     */
+    function ready() {
+        $button.on('click', function (e) {
+            e.preventDefault();
+
+            localClicks++;
+            incrementClick();
+
+            if (lastReport + reportInterval > Date.now()) {
+                return;
+            }
+
+            lastReport = Date.now();
+
+            // userClicksRef.transaction(function (clickcount) {
+            //     if (clickcount >= 0) {
+            //         clickcount += localClicks;
+            //     }
+            //     else {
+            //         clickcount = 0;
+            //     }
+            //     return clickcount;
+            // });
+
+
+            clicksRef.transaction(function(clickcount){
+                if (clickcount >= 0) {
+                    clickcount += localClicks;
+                }
+                else {
+                    clickcount = 0;
+                }
+                return clickcount;
+            }, function (error) {
+                clicksRef.once('value', function (data){
+                    var val = data.val()
+                    if (val) {
+                        localClicks = 0;
+                        allClicks = val;
+                        incrementClick();
+                    }
+                });
+            });
+        });
+    }
+
+    function login() {
+        firebase.auth().onAuthStateChanged(function(val) {
+            if (val) {
+                user.uid = val.uid;
+                userRef = usersRef.child(user.uid);
+                userClicksRef = userRef.child('clicks');
+                userRef.once('value', function(data){
+                    if (data.val() === null) {
+                        usersRef.child(user.uid).set(user);
+                    }
+                    else {
+                        user = data.val();
+                    }
+                    ready();
+                });
+            }
+            // User logout
+            else {
+            }
+        });
+        firebase.auth().signInAnonymously().catch(function(error) {
+            var errorCode = error.code;
+            var errorMessage = error.message;
+        });
+    }
+
+
+
+    function incrementClick() {
+        var clicks = allClicks + localClicks;
+        if (lastClicks > clicks) {
+            return;
+        }
+        lastClicks = clicks;
         clickCounter = clicks;
         $clickCount.text(clicks);
         for (var i = 0; i < progressBars.length; i++) {
@@ -74,7 +161,7 @@ $(function() {
     }
 
     function updateGoals() {
-        goals.once('value', function(data){
+        goalsRef.once('value', function(data){
             progressBars = [];
             $progressContainer.html('');
             var goals = data.val();
@@ -91,10 +178,11 @@ $(function() {
                 $progressContainer.append($container);
             }
         });
-        clicker.once('value', function (data, prev) {
+        clickerRef.once('value', function (data, prev) {
             var val = data.val();
             if (val.clicks) {
-                incrementClick(val.clicks);
+                allClicks = val.clicks;
+                incrementClick();
             }
         });
     }
