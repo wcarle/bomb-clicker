@@ -19,41 +19,83 @@ $(function() {
         clicks: 0
     };
 
-    const reportInterval = 1000;
-    var lastReport = 0;
-
+    var updateInterval = 1000;
+    var updateIntervalId = 0;
 
     var lastClicks = 0;
 
+    var sendingClicks = 0;
+    var renderedClicks = 0;
     var allClicks = 0;
     var localClicks = 0;
+    var localClicksSend = 0;
 
+    var appRef = database.ref('app');
     var clickerRef = database.ref('clicker');
     var usersRef = database.ref('users');
     var userRef = null;
     var userClicksRef = null;
     var clicksRef = database.ref('clicker/clicks');
     var goalsRef = database.ref('goals');
+    var leaderBoardRef = database.ref('users').limitToLast(10).orderByChild('clicks');
+
 
     login();
 
     var $button = $('#clicker');
     var $clickCount = $('#clicks');
     var $progressContainer = $('#progress-container');
+    var $leaderboard = $('#leaderboard');
 
 
     goalsRef.on('child_added', updateGoals);
     goalsRef.on('child_removed', updateGoals);
     goalsRef.on('child_changed', updateGoals);
 
+    leaderBoardRef.on('child_added', addLeaderboard);
+    leaderBoardRef.on('child_removed', removeLeaderboard);
+    leaderBoardRef.on('child_changed', addLeaderboard);
+
+
+    appRef.on('value', function (data, prev) {
+        var val = data.val();
+        if (val.updateInterval) {
+            updateInterval = val.updateInterval;
+        }
+        clearInterval(updateIntervalId)
+        updateIntervalId = setInterval(updateLoop, updateInterval);
+    })
 
     clickerRef.on('value', function (data, prev) {
         var val = data.val();
         if (val.clicks) {
-            // allClicks = val.clicks;
-            // incrementClick();
+            localClicks -= sendingClicks;
+            sendingClicks = 0;
+            allClicks = val.clicks;
+            incrementClick();
         }
     });
+
+
+    function updateLoop() {
+        if (localClicks <= 0) {
+            return;
+        }
+        sendingClicks = localClicks;
+        userClicksRef.transaction(function (clickcount) {
+            if (clickcount >= 0) {
+                clickcount += sendingClicks;
+            }
+            else {
+                clickcount = 0;
+            }
+            return clickcount;
+        }, function(error){
+            if (!error) {
+                // localClicks -= sendingClicks;
+            }
+        });
+    }
 
     /**
      * We're all logged in and setup, we can now accept user input
@@ -64,42 +106,6 @@ $(function() {
 
             localClicks++;
             incrementClick();
-
-            if (lastReport + reportInterval > Date.now()) {
-                return;
-            }
-
-            lastReport = Date.now();
-
-            // userClicksRef.transaction(function (clickcount) {
-            //     if (clickcount >= 0) {
-            //         clickcount += localClicks;
-            //     }
-            //     else {
-            //         clickcount = 0;
-            //     }
-            //     return clickcount;
-            // });
-
-
-            clicksRef.transaction(function(clickcount){
-                if (clickcount >= 0) {
-                    clickcount += localClicks;
-                }
-                else {
-                    clickcount = 0;
-                }
-                return clickcount;
-            }, function (error) {
-                clicksRef.once('value', function (data){
-                    var val = data.val()
-                    if (val) {
-                        localClicks = 0;
-                        allClicks = val;
-                        incrementClick();
-                    }
-                });
-            });
         });
     }
 
@@ -111,10 +117,15 @@ $(function() {
                 userClicksRef = userRef.child('clicks');
                 userRef.once('value', function(data){
                     if (data.val() === null) {
+                        user.name = prompt("What's your name? (for the leaderboard)");
                         usersRef.child(user.uid).set(user);
                     }
                     else {
                         user = data.val();
+                        if (!user.name) {
+                            user.name = prompt("What's your name? (for the leaderboard)");
+                            usersRef.child(user.uid).set(user);
+                        }
                     }
                     ready();
                 });
@@ -133,7 +144,8 @@ $(function() {
 
     function incrementClick() {
         var clicks = allClicks + localClicks;
-        if (lastClicks > clicks) {
+
+        if (lastClicks >= clicks) {
             return;
         }
         lastClicks = clicks;
@@ -160,6 +172,31 @@ $(function() {
         }
     }
 
+    function addLeaderboard(data) {
+        var val = data.val();
+        $existing = $leaderboard.find('#' + val.uid);
+        if ($existing.length === 0) {
+            $leaderboard.append('<li data-clicks="' + val.clicks + '" id="' + val.uid + '">' + val.name + ' - ' + val.clicks + '</li>')
+        }
+        else {
+            $existing.text(val.name + ' - ' + val.clicks).data('clicks', val.clicks);
+        }
+        sortLeaderboard();
+    }
+
+    function removeLeaderboard(data) {
+        var val = data.val();
+        $existing = $leaderboard.find('#' + val.uid);
+        $existing.remove();
+        sortLeaderboard();
+    }
+
+    function sortLeaderboard() {
+        $leaderboard.find('li').sort(function (a, b) {
+            return $(b).data('clicks') - $(a).data('clicks');
+        }).appendTo($leaderboard);
+    }
+
     function updateGoals() {
         goalsRef.once('value', function(data){
             progressBars = [];
@@ -168,7 +205,7 @@ $(function() {
             for(goal in goals) {
                 var name = goal;
                 var count = goals[goal];
-                var $container = $('<div class="goal"><h2>' + name + ' - ' + count + '</h2></div>');
+                var $container = $('<div class="goal"><h4>' + name + ' - ' + count + '</h4></div>');
                 var $progress = $('<div class="progress"></div>');
 
                 var $progressBar = $('<div data-goal="' + count + '" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>');
