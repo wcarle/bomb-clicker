@@ -20,7 +20,7 @@
     "twig": "^1.13.3"
   },
   "devDependencies": {
-    "mocha": "^6.1.4",
+    "mocha": "^10.2.0",
     "supertest": "^4.0.2"
   }
 }
